@@ -45,6 +45,12 @@ while (true)
     Console.WriteLine("2 - Listar pacientes");
     Console.WriteLine("3 - Atualizar paciente (por Id)");
     Console.WriteLine("4 - Remover paciente (por Id)");
+    Console.WriteLine("-------------------------------------------------");
+    Console.WriteLine("5 - Cadastrar consulta para um paciente");
+    Console.WriteLine("6 - Listar TODAS as consultas");
+    Console.WriteLine("7 - Listar consultas de um paciente (por Id)");
+    Console.WriteLine("8 - Listar pacientes com suas consultas (JOIN)");
+    Console.WriteLine("-------------------------------------------------");
     Console.WriteLine("0 - Sair");
     Console.Write("> ");
 
@@ -54,25 +60,15 @@ while (true)
 
     switch (opt)
     {
-    case "1":
-        await CreatePatientAsync();
-        break;
-
-    case "2":
-        await ListPatientsAsync();
-        break;
-
-    case "3":
-        await UpdatePatientAsync();
-        break;
-
-    case "4":
-        await DeletePatientAsync();
-        break;
-
-    default:
-        Console.WriteLine("Opção inválida.");
-        break;
+        case "1": await CreatePatientAsync(); break;
+        case "2": await ListPatientsAsync(); break;
+        case "3": await UpdatePatientAsync(); break;
+        case "4": await DeletePatientAsync(); break;
+        case "5": await CreateConsultationAsync(); break;
+        case "6": await ListConsultationsAsync(); break;
+        case "7": await ListConsultationsByPatientAsync(); break;
+        case "8": await ListPatientsWithConsultationsAsync(); break;
+        default: Console.WriteLine("Opção inválida."); break;
     }
 }
 
@@ -171,4 +167,155 @@ async Task DeletePatientAsync()
     db.Patients.Remove(patient);
     await db.SaveChangesAsync();
     Console.WriteLine("Paciente removido com sucesso.");
+}
+
+async Task CreateConsultationAsync()
+{
+    Console.Write("Id do paciente: ");
+    if (!int.TryParse(Console.ReadLine(), out var pid))
+    {
+        Console.WriteLine("Id inválido.");
+        return;
+    }
+
+    Console.Write("Especialidade: ");
+    var specialty = Console.ReadLine()?.Trim();
+
+    Console.Write("Data da consulta (dd/MM/yyyy): ");
+    var dateStr = Console.ReadLine()?.Trim();
+
+    if (!DateOnly.TryParseExact(dateStr, "dd/MM/yyyy", out var date))
+    {
+        Console.WriteLine("Data inválida.");
+        return;
+    }
+
+    Console.Write("Preço: ");
+    if (!decimal.TryParse(Console.ReadLine(), out var price))
+    {
+        Console.WriteLine("Preço inválido.");
+        return;
+    }
+
+    using var db = new AppDbContext();
+
+    if (!await db.Patients.AnyAsync(p => p.Id == pid))
+    {
+        Console.WriteLine("Paciente não existe.");
+        return;
+    }
+
+    var c = new Consultation
+    {
+        PatientId = pid,
+        Specialty = specialty!,
+        Date = date,
+        Price = price
+    };
+
+    db.Consultations.Add(c);
+    await db.SaveChangesAsync();
+
+    Console.WriteLine("Consulta cadastrada!");
+}
+
+async Task ListConsultationsAsync()
+{
+    using var db = new AppDbContext();
+
+    var list = await (
+        from c in db.Consultations
+        join p in db.Patients on c.PatientId equals p.Id
+        orderby c.Date
+        select new
+        {
+            c.Id,
+            Paciente = p.Name,
+            c.Specialty,
+            c.Date,
+            c.Price
+        }
+    ).ToListAsync();
+
+    if (list.Count == 0)
+    {
+        Console.WriteLine("Nenhuma consulta cadastrada.");
+        return;
+    }
+
+    foreach (var c in list)
+        Console.WriteLine($"{c.Id} | {c.Paciente} | {c.Specialty} | {c.Date:dd/MM/yyyy} | R$ {c.Price}");
+}
+
+async Task ListConsultationsByPatientAsync()
+{
+    Console.Write("Id do paciente: ");
+    if (!int.TryParse(Console.ReadLine(), out var pid))
+    {
+        Console.WriteLine("Id inválido.");
+        return;
+    }
+
+    using var db = new AppDbContext();
+
+    var p = await db.Patients.FindAsync(pid);
+    if (p == null)
+    {
+        Console.WriteLine("Paciente não encontrado.");
+        return;
+    }
+
+    var list = await db.Consultations
+        .Where(c => c.PatientId == pid)
+        .OrderBy(c => c.Date)
+        .ToListAsync();
+
+    Console.WriteLine($"Consultas de {p.Name}:");
+
+    if (list.Count == 0)
+    {
+        Console.WriteLine("(nenhuma)");
+        return;
+    }
+
+    foreach (var c in list)
+        Console.WriteLine($"- {c.Date:dd/MM/yyyy} | {c.Specialty} | R$ {c.Price}");
+}
+
+async Task ListPatientsWithConsultationsAsync()
+{
+    using var db = new AppDbContext();
+
+    var rows = await (
+        from p in db.Patients
+        join c in db.Consultations on p.Id equals c.PatientId
+        orderby p.Name, c.Date
+        select new
+        {
+            p.Name,
+            p.Email,
+            c.Specialty,
+            c.Date
+        }
+    ).ToListAsync();
+
+    if (rows.Count == 0)
+    {
+        Console.WriteLine("Nenhum resultado (JOIN).");
+        return;
+    }
+
+    string? atual = null;
+
+    foreach (var r in rows)
+    {
+        if (atual != r.Name)
+        {
+            atual = r.Name;
+            Console.WriteLine($"\nPaciente: {atual} ({r.Email})");
+            Console.WriteLine("Consultas:");
+        }
+
+        Console.WriteLine($"  - {r.Date:dd/MM/yyyy} | {r.Specialty}");
+    }
 }

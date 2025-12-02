@@ -23,4 +23,6 @@ public class Patient
     [Required]
     [Column(TypeName = "DATE")]
     public DateOnly BirthDate { get; set; }
+
+    public List<Consultation> Consultations{get;set;} = new();
 }

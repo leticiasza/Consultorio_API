@@ -8,6 +8,7 @@ public class AppDbContext : DbContext{
     public AppDbContext(DbContextOptions<AppDbContext> options) :base(options){}
 
     public  DbSet<Patient> Patients => Set<Patient>();
+    public DbSet<Consultation> Consultations => Set<Consultation>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -25,5 +26,18 @@ public class AppDbContext : DbContext{
             e.Property(p => p.CPF);
             e.HasIndex(p => p.CPF).IsUnique(); // CPF único
         });
+
+        modelBuilder.Entity<Consultation>(e =>{
+            e.HasKey(c => c.Id);
+            e.Property(c => c.Specialty);
+            e.Property(c => c.Price);
+            e.Property(c => c.Date);
+            
+            e.HasOne(c => c.Patient)
+                .WithMany(p => p.Consultations)
+                .HasForeignKey(c => c.PatientId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
     }
 }
